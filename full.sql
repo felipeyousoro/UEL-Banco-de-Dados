@@ -6,13 +6,13 @@ BEGIN;
 	);
 		
 	CREATE TABLE Book_Status (
-		id SERIAL NOT NULL,
+		book_status_id SERIAL NOT NULL,
 		acquisition_date DATE NOT NULL DEFAULT CURRENT_DATE,
 		current_condition VARCHAR(255) NOT NULL DEFAULT 'good',
         book_id INT NOT NULL,
 		branch_id INT NOT NULL,
 
-		CONSTRAINT PK_Book_Status PRIMARY KEY (id),
+		CONSTRAINT PK_Book_Status PRIMARY KEY (book_status_id),
         CONSTRAINT FK_Book_Status_Branch FOREIGN KEY (branch_id) REFERENCES Library_Branch(branch_id),
 		CONSTRAINT FK_Book_Status_Book FOREIGN KEY (book_id) REFERENCES Book(book_id),
 		CONSTRAINT CHK_Book_Status_Current_Condition CHECK (current_condition IN ('fine', 'good', 'fair', 'poor'))
@@ -28,7 +28,7 @@ BEGIN;
 										AND bs.branch_id = _branch_id;
 										
 			copies_book_copies := bc.no_of_copies FROM Book_Copies AS bc
-							WHERE bc.book_id = _book_id 
+									WHERE bc.book_id = _book_id 
 										AND bc.branch_id = _branch_id;
 										
 			RETURN copies_book_copies - copies_book_status;
@@ -72,6 +72,75 @@ BEGIN;
 	$$ LANGUAGE plpgsql;
 	
 	SELECT Remove_Copies_Inconsistencies();
-	SELECT * FROM Book_Status;
+
+	ALTER TABLE Book_Loans 
+		ADD COLUMN book_status_id INT;
+	ALTER TABLE Book_Loans
+		DROP CONSTRAINT PK_Book_Loans;
+	ALTER TABLE Book_Loans
+		DROP CONSTRAINT FK_Book_Loans_Book;
+	ALTER TABLE Book_Loans
+		DROP CONSTRAINT FK_Book_Loans_Branch;
+		
+	CREATE FUNCTION Get_Available_Copy_Given_Day(_book_id INT, _branch_id INT, _day DATE) RETURNS INT AS $$
+		BEGIN
+			RETURN (SELECT bs.book_status_id FROM Book_Status AS bs
+                    WHERE bs.book_id = _book_id AND
+                        bs.branch_id = _branch_id AND
+						bs.book_status_id NOT IN (SELECT bl.book_status_id FROM Book_Loans AS bl
+                                                    WHERE bl.book_id = _book_id AND
+														bl.branch_id = _branch_id AND
+														bl.date_out <= _day AND
+														bl.due_date >= _day AND
+												  		book_status_id IS NOT NULL)
+										
+                    LIMIT 1);
+		
+		END;
+		
+	$$ LANGUAGE plpgsql;
+		
+	CREATE FUNCTION Add_Copy_Book_Loan(_loan Book_Loans) RETURNS VOID AS $$
+        BEGIN
+            UPDATE Book_Loans
+				SET 
+					book_status_id = Get_Available_Copy_Given_Day(_loan.book_id, _loan.branch_id, _loan.date_out)
+				WHERE
+					book_id = _loan.book_id AND
+					branch_id = _loan.branch_id AND
+					card_no = _loan.card_no;
+					
+        END;
+	$$ LANGUAGE plpgsql;
 	
+	CREATE FUNCTION Update_Book_Loans() RETURNS VOID AS $$
+		DECLARE _loan Book_Loans;
+		BEGIN
+			FOR _loan IN SELECT * FROM Book_Loans LOOP
+				PERFORM Add_Copy_Book_Loan(_loan);
+			END LOOP;
+		END;
+		
+	$$ LANGUAGE plpgsql;
+	
+	SELECT Update_Book_Loans();
+-- 	ALTER TABLE Book_Loans
+-- 		ADD CONSTRAINT PK_Book_Loans PRIMARY KEY (book_copy_id, date_out, due_date);
+-- 	ALTER TABLE Book_Loans
+-- 		DROP COLUMN book_id;
+-- 	ALTER TABLE Book_Loans
+-- 		DROP COLUMN branch_id;
+		
+    SELECT * FROM book_loans;
+	
+-- 	SELECT bs.book_status_id FROM Book_Status AS bs
+--                     WHERE bs.book_id = 1 AND
+--                         bs.branch_id = 1 AND
+-- 						bs.book_status_id NOT IN (SELECT bl.book_status_id FROM Book_Loans AS bl
+--                                                     WHERE bl.book_id = 1 AND
+-- 														bl.branch_id = 1 AND
+-- 												  		bl.date_out <= '2017-01-01' AND
+-- 														bl.due_date >= '2017-01-01' AND
+-- 												  		book_status_id IS NOT NULL) LIMIT 1;
+
 ROLLBACK;
