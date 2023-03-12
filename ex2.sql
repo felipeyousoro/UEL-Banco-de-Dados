@@ -151,6 +151,56 @@ BEGIN;
 			ORDER BY bs.book_id, bs.branch_id;
 		
 		
+	CREATE OR REPLACE FUNCTION Add_New_Books(_book_id INT, _branch_id INT, _old_no_of_copies BIGINT, _new_no_of_copies BIGINT) RETURNS VOID AS $$
+		DECLARE _copy INT;
+		BEGIN
+			FOR _copy in (_old_no_of_copies + 1) .. _new_no_of_copies LOOP
+				INSERT INTO Book_Status (book_id, branch_id)
+						VALUES (_book_id, _branch_id);
+			END LOOP;
+		END;
+	$$ LANGUAGE plpgsql;
+	
+	CREATE OR REPLACE FUNCTION Update_Book_Copies() RETURNS TRIGGER AS $$
+		DECLARE _copy INT;
+		BEGIN 
+			IF TG_OP = 'INSERT' THEN
+				FOR _copy IN 1..NEW.no_of_copies LOOP 
+					INSERT INTO Book_Status (book_id, branch_id)
+						VALUES (NEW.book_id, NEW.branch_id);
+				END LOOP;
+			ELSEIF TG_OP = 'DELETE' THEN
+				DELETE FROM Book_Status AS bs
+					WHERE bs.book_id = OLD.book_id AND bs.branch_id = OLD.branch_id;
+			ELSEIF TG_OP = 'UPDATE' THEN
+				IF OLD.no_of_copies > NEW.no_of_copies THEN
+					RETURN NULL;
+				ELSE 
+					UPDATE Book_Status AS bs SET 
+					book_id = NEW.book_id,
+					branch_id = NEW.branch_id
+					WHERE bs.book_id = OLD.book_id AND
+						bs.branch_id = OLD.branch_id;
+					PERFORM Add_New_Books(NEW.book_id, NEW.branch_id, OLD.no_of_copies, NEW.no_of_copies);
+				END IF;
+			END IF;
+			RETURN NULL;
+		END;
+	$$ LANGUAGE plpgsql;
+	
+	CREATE OR REPLACE TRIGGER TG_Update_Book_Copies
+		INSTEAD OF INSERT OR
+				UPDATE OR
+				DELETE ON Book_Copies
+		FOR EACH ROW EXECUTE PROCEDURE Update_Book_Copies();
+		
+
+	
 	SELECT * FROM Book_Copies;
+	SELECT * FROM Book_Status;
+	DELETE FROM Book_Copies WHERE book_id = 1 AND branch_id = 1;
+	INSERT INTO Book_Copies (book_id, branch_id, no_of_copies) VALUES (1, 1, 10);
+	
+	UPDATE Book_Copies SET no_of_copies = 14 WHERE book_id = 2 AND branch_id = 1;
 	
 ROLLBACK;
