@@ -87,12 +87,13 @@ BEGIN;
 			RETURN (SELECT bs.book_status_id FROM Book_Status AS bs
                     WHERE bs.book_id = _book_id AND
                         bs.branch_id = _branch_id AND
-						bs.book_status_id NOT IN (SELECT bl.book_status_id FROM Book_Loans AS bl
-                                                    WHERE bl.book_id = _book_id AND
-														bl.branch_id = _branch_id AND
-														bl.date_out <= _day AND
-														bl.due_date >= _day AND
-												  		book_status_id IS NOT NULL)
+						            bs.book_status_id NOT IN 
+                            (SELECT bl.book_status_id FROM Book_Loans AS bl
+                                WHERE bl.book_id = _book_id AND
+                                bl.branch_id = _branch_id AND
+                                bl.date_out <= _day AND
+                                bl.due_date >= _day AND
+                                  book_status_id IS NOT NULL)
 										
                     LIMIT 1);
 		
