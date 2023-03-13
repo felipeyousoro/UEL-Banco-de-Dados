@@ -22,8 +22,8 @@ BEGIN;
 	);
 	
 	CREATE OR REPLACE FUNCTION Check_Copy_Inconsistencies(_book_id INT, _branch_id INT) RETURNS INT AS $$
-		DECLARE copies_book_copies INTEGER;
-		DECLARE copies_book_status INTEGER;
+		DECLARE copies_book_copies INT;
+		DECLARE copies_book_status INT;
 		BEGIN
 			copies_book_status := COUNT(*) FROM Book_Status AS bs
 									WHERE bs.book_id = _book_id 
@@ -151,7 +151,7 @@ BEGIN;
 			ORDER BY bs.book_id, bs.branch_id;
 		
 		
-	CREATE OR REPLACE FUNCTION Add_New_Books(_book_id INT, _branch_id INT, _old_no_of_copies BIGINT, _new_no_of_copies BIGINT) RETURNS VOID AS $$
+	CREATE OR REPLACE FUNCTION Add_New_Books(_book_id INT, _branch_id INT, _old_no_of_copies INT, _new_no_of_copies INT) RETURNS VOID AS $$
 		DECLARE _copy INT;
 		BEGIN
 			FOR _copy in (_old_no_of_copies + 1) .. _new_no_of_copies LOOP
@@ -181,7 +181,8 @@ BEGIN;
 					branch_id = NEW.branch_id
 					WHERE bs.book_id = OLD.book_id AND
 						bs.branch_id = OLD.branch_id;
-					PERFORM Add_New_Books(NEW.book_id, NEW.branch_id, OLD.no_of_copies, NEW.no_of_copies);
+																					-- nao sei mas no_of_copies esta vindo como bigint
+					PERFORM Add_New_Books(NEW.book_id, NEW.branch_id, OLD.no_of_copies::INT, NEW.no_of_copies::INT);
 				END IF;
 			END IF;
 			RETURN NULL;

@@ -73,6 +73,10 @@ INSERT INTO Publisher VALUES ('Macmillan', 'London', '123-456-7890');
 INSERT INTO Book VALUES (1, 'The Great Gatsby', 'Penguin');
 INSERT INTO Book VALUES (2, 'The Catcher in the Rye', 'Penguin');
 INSERT INTO Book VALUES (3, 'The Grapes of Wrath', 'Penguin');
+INSERT INTO Book VALUES (4, 'Quatro', 'Penguin');
+INSERT INTO Book VALUES (5, 'Cinco', 'Penguin');
+INSERT INTO Book VALUES (6, 'Seis', 'Penguin');
+INSERT INTO Book VALUES (7, 'Sete', 'Penguin');
 
 INSERT INTO Library_Branch VALUES (1, 'Main', '123 Main St');
 INSERT INTO Library_Branch VALUES (2, 'Branch', '456 Branch St');
@@ -86,6 +90,11 @@ INSERT INTO Borrower VALUES (5, 'John Smith', '456 Main St', '123-456-7890');
 INSERT INTO Book_Authors VALUES (1, 'F. Scott Fitzgerald');
 INSERT INTO Book_Authors VALUES (2, 'J. D. Salinger');
 INSERT INTO Book_Authors VALUES (3, 'John Steinbeck');
+INSERT INTO Book_Authors VALUES(4, 'John Joseph Powell');
+INSERT INTO Book_Authors VALUES(5, 'John J. Powell');
+INSERT INTO Book_Authors VALUES(6, 'John Joseph Poweell');
+INSERT INTO Book_Authors VALUES(7, 'John Joseph Pwoell');
+
 
 INSERT INTO Book_Copies VALUES (1, 1, 2);
 INSERT INTO Book_Copies VALUES (1, 2, 1);
