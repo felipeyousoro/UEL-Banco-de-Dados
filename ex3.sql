@@ -67,22 +67,36 @@
 			DECLARE
 				_record1 RECORD;
 				_record2 RECORD;
+				_author_name VARCHAR;
+				_count INT;
+				_count_sum INT;
 				_cursor1 CURSOR FOR SELECT author_name FROM Book_Authors FOR UPDATE;
-				_cursor2 CURSOR FOR SELECT author_name FROM Book_Authors FOR UPDATE;
 			BEGIN 
 				OPEN _cursor1;
 				LOOP
 					FETCH _cursor1 INTO _record1;
+					
 					EXIT WHEN NOT FOUND;
 						SELECT author_name, COUNT(*) AS author_count
-						INTO _record2
+							INTO _author_name, _count
 							FROM Book_Authors
-							WHERE Levenshtein(author_name, _record1.author_name) < 2 AND
-								Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(_record1.author_name)) < 2 AND
+							WHERE Levenshtein(author_name, _record1.author_name) < 2 OR
+								Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(_record1.author_name)) < 2 OR
 								Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(_record1.author_name)
-							GROUP BY author_name;
-					INSERT INTO Book_Authors_Log VALUES (_record2.author_name, _record2.author_count);
-					--INSERT INTO Book_Authors_Log VALUES (_record1.author_name);
+							GROUP BY author_name
+							ORDER BY author_count DESC
+							LIMIT 1;
+							
+							SELECT SUM(_count) INTO _count_sum;
+	
+						UPDATE Book_Authors 
+							SET author_name = _author_name
+							WHERE Levenshtein(author_name, _author_name) < 2 OR
+								Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(_record1.author_name)) < 2 OR
+								Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(_record1.author_name);
+
+						INSERT INTO Book_Authors_Log (new_author_name, _count) VALUES (_record1.author_name, _count_sum);
+
 				END LOOP;
 				CLOSE _cursor1;
 			END;
@@ -92,11 +106,20 @@
 		SELECT * FROM Book_Authors;
 		SELECT * FROM Book_Authors_Log;
 		
-		SELECT author_name, COUNT(*) AS author_count
-				FROM Book_Authors
-				WHERE Levenshtein(author_name, 'John J. Powell') < 2 OR
-					Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name('John J. Powell')) < 2 OR --possivelmente and aqui
-					Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name('John J. Powell')
-				GROUP BY author_name;
+-- 		SELECT author_name, COUNT(*) AS author_count
+-- 				FROM Book_Authors
+-- 				WHERE Levenshtein(author_name, 'John J. Powell') < 2 OR
+-- 					Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name('John J. Powell')) < 2 OR --possivelmente and aqui
+-- 					Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name('John J. Powell')
+-- 				GROUP BY author_name
+-- 				ORDER BY author_count DESC;
+		
+-- 		UPDATE Book_Authors 
+-- 			SET author_name = 'John J. Powell'
+-- 			WHERE Levenshtein(author_name, 'John J. Powell') < 2 OR
+-- 			Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name('John J. Powell')) < 2 OR
+-- 			Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name('John J. Powell');
+
+
 
 ROLLBACK;
