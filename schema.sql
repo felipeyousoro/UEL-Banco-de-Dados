@@ -1,3 +1,4 @@
+-- sem criatividade para nome do schema, então usei o nome do projeto
 CREATE SCHEMA Book_Loans;
 
 CREATE TABLE Book_Loans.Publisher (
