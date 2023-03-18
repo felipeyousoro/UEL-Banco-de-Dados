@@ -54,7 +54,7 @@ BEGIN;
 		
 	$$ LANGUAGE plpgsql;
 
-  	CREATE OR REPLACE FUNCTION Book_Loans.Fix_Copy_Inconsistencies(_copy Copy_Inconsistencies) RETURNS VOID AS $$
+  	CREATE OR REPLACE PROCEDURE Book_Loans.Fix_Copy_Inconsistencies(_copy Copy_Inconsistencies) LANGUAGE plpgsql AS $$
 		DECLARE book INT;
 		BEGIN
 			FOR book IN 1.._copy.copies_diff LOOP
@@ -62,19 +62,19 @@ BEGIN;
 			END LOOP;
 		END;
 		
-	$$ LANGUAGE plpgsql;
+	$$;
 	
-	CREATE OR REPLACE FUNCTION Book_Loans.Remove_Copies_Inconsistencies() RETURNS VOID AS $$
+	CREATE OR REPLACE PROCEDURE Book_Loans.Remove_Copies_Inconsistencies() LANGUAGE plpgsql AS $$
         DECLARE _copy Copy_Inconsistencies;
         BEGIN
             FOR _copy IN SELECT * FROM Book_Loans.Get_Copies_Inconsistencies() LOOP
-                PERFORM Book_Loans.Fix_Copy_Inconsistencies(_copy);
+                CALL Book_Loans.Fix_Copy_Inconsistencies(_copy);
             END LOOP;
         END;
 		
-	$$ LANGUAGE plpgsql;
+	$$;
 	
-	SELECT Book_Loans.Remove_Copies_Inconsistencies();
+	CALL Book_Loans.Remove_Copies_Inconsistencies();
 
 	ALTER TABLE Book_Loans.Book_Loans 
 		ADD COLUMN book_status_id INT;
@@ -107,7 +107,7 @@ BEGIN;
 		
 	$$ LANGUAGE plpgsql;
 		
-	CREATE OR REPLACE FUNCTION Book_Loans.Add_Copy_Book_Loan(_loan Book_Loans.Book_Loans) RETURNS VOID AS $$
+	CREATE OR REPLACE PROCEDURE Book_Loans.Add_Copy_Book_Loan(_loan Book_Loans.Book_Loans) LANGUAGE plpgsql AS $$
         BEGIN
             UPDATE Book_Loans.Book_Loans
 				SET 
@@ -118,19 +118,19 @@ BEGIN;
 					card_no = _loan.card_no;
 					
         END;
-	$$ LANGUAGE plpgsql;
+	$$;
 	
-	CREATE OR REPLACE FUNCTION Book_Loans.Update_Book_Loans() RETURNS VOID AS $$
+	CREATE OR REPLACE PROCEDURE Book_Loans.Update_Book_Loans() LANGUAGE plpgsql AS $$
 		DECLARE _loan Book_Loans.Book_Loans;
 		BEGIN
 			FOR _loan IN SELECT * FROM Book_Loans.Book_Loans LOOP
-				PERFORM Book_Loans.Add_Copy_Book_Loan(_loan);
+				CALL Book_Loans.Add_Copy_Book_Loan(_loan);
 			END LOOP;
 		END;
 		
-	$$ LANGUAGE plpgsql;
+	$$;
 	
-	SELECT Book_Loans.Update_Book_Loans();
+	CALL Book_Loans.Update_Book_Loans();
 	
  	ALTER TABLE Book_Loans.Book_Loans
  		ADD CONSTRAINT PK_Book_Loans PRIMARY KEY (book_status_id, date_out);
@@ -154,7 +154,7 @@ BEGIN;
 			ORDER BY bs.book_id, bs.branch_id;
 		
 		
-	CREATE OR REPLACE FUNCTION Book_Loans.Add_New_Books(_book_id INT, _branch_id INT, _old_no_of_copies INT, _new_no_of_copies INT) RETURNS VOID AS $$
+	CREATE OR REPLACE PROCEDURE Book_Loans.Add_New_Books(_book_id INT, _branch_id INT, _old_no_of_copies INT, _new_no_of_copies INT) LANGUAGE plpgsql AS $$
 		DECLARE _copy INT;
 		BEGIN
 			FOR _copy in (_old_no_of_copies + 1) .. _new_no_of_copies LOOP
@@ -162,7 +162,7 @@ BEGIN;
 					VALUES (_book_id, _branch_id);
 			END LOOP;
 		END;
-	$$ LANGUAGE plpgsql;
+	$$;
 	
 	CREATE OR REPLACE FUNCTION Book_Loans.Update_Book_Copies() RETURNS TRIGGER AS $$
 		DECLARE _copy INT;
@@ -186,7 +186,7 @@ BEGIN;
 						WHERE bs.book_id = OLD.book_id AND
 						bs.branch_id = OLD.branch_id;
 
-					PERFORM Book_Loans.Add_New_Books(NEW.book_id, NEW.branch_id, OLD.no_of_copies::INT, NEW.no_of_copies::INT);
+					CALL Book_Loans.Add_New_Books(NEW.book_id, NEW.branch_id, OLD.no_of_copies::INT, NEW.no_of_copies::INT);
 				END IF;
 			END IF;
 			RETURN NULL;
