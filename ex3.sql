@@ -1,5 +1,7 @@
 BEGIN;
 
+	-- Decidi nao incluir a funcao no Schema, pois ela e bastante
+	-- abrangente e pode ser usada em outros lugares
 	CREATE OR REPLACE FUNCTION Levenshtein(str1 VARCHAR, str2 VARCHAR) RETURNS INT AS $$
 		DECLARE
 			len1 int := LENGTH(str1);
@@ -37,12 +39,14 @@ BEGIN;
 		END;
 	$$ LANGUAGE plpgsql;	
 	
+	-- Retorna o nome do meio reduzido (Joao da Silva -> d.)
 	CREATE OR REPLACE FUNCTION Book_Loans.Get_Shortened_Middle_Name(_name VARCHAR) RETURNS VARCHAR AS $$
 		BEGIN
 			RETURN SUBSTRING(SPLIT_PART(_name, ' ', 2), 1, 1);
 		END;
 	$$ LANGUAGE plpgsql;
 
+	-- Funcao que retorna o nome reduzido (Joao da Silva -> Joao d. Silva)
 	CREATE OR REPLACE FUNCTION Book_Loans.Get_Shortened_Name(_name VARCHAR) RETURNS VARCHAR AS $$
 		DECLARE 
 			_first_name VARCHAR;
@@ -58,6 +62,7 @@ BEGIN;
 		END;
 	$$ LANGUAGE plpgsql;
 	
+	-- Log
 	CREATE TABLE Book_Loans.Book_Authors_Log (
 		book_id INT NOT NULL,
 		new_author_name VARCHAR(255) NOT NULL,
@@ -94,11 +99,25 @@ BEGIN;
 				FETCH _cursor1 INTO _record1;
 				
 				EXIT WHEN NOT FOUND;
+				-- Definitivamente otimizavel, mas a logica e a seguinte
+
+				-- Contagem do nome mais comum caso siga os seguintes requisitos:
+
+					-- 1. As diferenças dos nomes originais sao ate 2 (ha possibilidade de algum nome aqui 
+						-- ja estar reduzido) 
+					-- 2. As diferenças dos nomes reduzidos sao ate 2 
+
+					-- 3. Satisfeitas alguma das condiçoes
+						-- o nome do meio reduzido DEVE ser igual, para que nao sejam casados nomes
+						-- cuja unica diferenca seja o nome do meio
+
+				-- Atualiza todos os nomes que satisfazem os requisitos anteriores
+				-- com o primeiro da contagem (por isso o limit 1)
 					SELECT author_name, COUNT(*) AS author_count
 						INTO _author_name, _count
 						FROM Book_Loans.Book_Authors
-						WHERE Levenshtein(author_name, _record1.author_name) < 2 OR
-							Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name(_record1.author_name)) < 2 OR
+						WHERE Levenshtein(author_name, _record1.author_name) < 3 OR
+							Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name(_record1.author_name)) < 3 OR
 							Book_Loans.Get_Shortened_Middle_Name(author_name) = Book_Loans.Get_Shortened_Middle_Name(_record1.author_name)
 						GROUP BY author_name
 						ORDER BY author_count DESC
@@ -108,8 +127,8 @@ BEGIN;
 
 					UPDATE Book_Loans.Book_Authors 
 						SET author_name = _author_name
-						WHERE Levenshtein(author_name, _author_name) < 2 OR
-							Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name(_record1.author_name)) < 2 OR
+						WHERE Levenshtein(author_name, _author_name) < 3 OR
+							Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name(_record1.author_name)) < 3 OR
 							Book_Loans.Get_Shortened_Middle_Name(author_name) = Book_Loans.Get_Shortened_Middle_Name(_record1.author_name);
 
 
@@ -119,23 +138,14 @@ BEGIN;
 	$$;
 	
 	CALL Book_Loans.Detect_And_Reconcile_Authors();
-	SELECT * FROM Book_Loans.Book_Authors;
-	SELECT * FROM Book_Loans.Book_Authors_Log;
+
+	-- Eu nao sei se o procedimento foi feito para ser chamado uma vez ou varias vezes
+	-- entao eu decidi deletar
+	DROP PROCEDURE Book_Loans.Detect_And_Reconcile_Authors;
+
+	-- SELECT * FROM Book_Loans.Book_Authors;
+	-- SELECT * FROM Book_Loans.Book_Authors_Log;
 	
- 		SELECT author_name, COUNT(*) AS author_count
- 				FROM Book_Loans.Book_Authors
- 				WHERE Levenshtein(author_name, 'John J. Powell') < 2 OR
- 					Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name('John J. Powell')) < 2 OR --possivelmente and aqui
- 					Book_Loans.Get_Shortened_Middle_Name(author_name) = Book_Loans.Get_Shortened_Middle_Name('John J. Powell')
- 				GROUP BY author_name
- 				ORDER BY author_count DESC;
+
 		
- 		UPDATE Book_Loans.Book_Authors 
- 			SET author_name = 'John J. Powell'
- 			WHERE Levenshtein(author_name, 'John J. Powell') < 2 OR
- 			Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name('John J. Powell')) < 2 OR
- 			Book_Loans.Get_Shortened_Middle_Name(author_name) = Book_Loans.Get_Shortened_Middle_Name('John J. Powell');
-
-
-
 ROLLBACK;

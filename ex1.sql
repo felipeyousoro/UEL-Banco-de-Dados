@@ -1,3 +1,4 @@
+-- Deixei tudo em transações para poder fazer rollback
 BEGIN;
 
 CREATE MATERIALIZED VIEW Book_Loans.month_borrowers (
@@ -20,12 +21,5 @@ CREATE MATERIALIZED VIEW Book_Loans.month_borrowers (
         JOIN Book_Loans.Book bo ON bl.book_id = bo.book_id
         JOIN Book_Loans.Library_Branch lb ON bl.branch_id = lb.branch_id
         WHERE (bl.due_date - bl.date_out) > 30;
-
-SELECT * FROM Book_Loans.month_borrowers;
-
-UPDATE Book_Loans.Book_Loans SET due_date = '2019-02-08' WHERE book_id = 1 AND branch_id = 1 AND card_no = 1;
-UPDATE Book_Loans.Book_Loans SET due_date = '2019-02-08' WHERE book_id = 2 AND branch_id = 1 AND card_no = 1;
-
-SELECT * FROM Book_Loans.month_borrowers;
 
 ROLLBACK;

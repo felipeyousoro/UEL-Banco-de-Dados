@@ -80,6 +80,17 @@ INSERT INTO Book_Loans.Book VALUES (4, 'Quatro', 'Penguin');
 INSERT INTO Book_Loans.Book VALUES (5, 'Cinco', 'Penguin');
 INSERT INTO Book_Loans.Book VALUES (6, 'Seis', 'Penguin');
 INSERT INTO Book_Loans.Book VALUES (7, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (8, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (9, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (10, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (11, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (12, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (13, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (14, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (15, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (16, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (17, 'Sete', 'Penguin');
+INSERT INTO Book_Loans.Book VALUES (18, 'Sete', 'Penguin');
 
 INSERT INTO Book_Loans.Library_Branch VALUES (1, 'Main', '123 Main St');
 INSERT INTO Book_Loans.Library_Branch VALUES (2, 'Branch', '456 Branch St');
@@ -92,12 +103,15 @@ INSERT INTO Book_Loans.Borrower VALUES (5, 'John Smith', '456 Main St', '123-456
 
 INSERT INTO Book_Loans.Book_Authors VALUES (1, 'F. Scott Fitzgerald');
 INSERT INTO Book_Loans.Book_Authors VALUES (2, 'J. D. Salinger');
-INSERT INTO Book_Loans.Book_Authors VALUES (3, 'John Steinbeck');
 INSERT INTO Book_Loans.Book_Authors VALUES(4, 'John Joseph Powell');
 INSERT INTO Book_Loans.Book_Authors VALUES(5, 'John J. Powell');
 INSERT INTO Book_Loans.Book_Authors VALUES(6, 'John Joseph Poweell');
-INSERT INTO Book_Loans.Book_Authors VALUES(7, 'John Joseph Pwoell');
-
+INSERT INTO Book_Loans.Book_Authors VALUES(7, 'John Joseph Powell');
+INSERT INTO Book_Loans.Book_Authors VALUES(8, 'John James Powell');
+INSERT INTO Book_Loans.Book_Authors VALUES(9, 'John J. Powell');
+INSERT INTO Book_Loans.Book_Authors VALUES(10, 'John James Pwoell');
+INSERT INTO Book_Loans.Book_Authors VALUES(11, 'John James Poweell');
+INSERT INTO Book_Loans.Book_Authors VALUES(12, 'John A. Poweell');
 
 INSERT INTO Book_Loans.Book_Copies VALUES (1, 1, 2);
 INSERT INTO Book_Loans.Book_Copies VALUES (1, 2, 1);

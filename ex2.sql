@@ -7,6 +7,8 @@ BEGIN;
 	DROP TABLE Book_Loans.Book_Copies;
 
 		
+	-- Nao tive muitas ideias para o nome da tabela, entao decidi book_status
+	-- por causa da condicao do livro
 	CREATE TABLE Book_Loans.Book_Status (
 		book_status_id SERIAL NOT NULL,
 		acquisition_date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -25,6 +27,7 @@ BEGIN;
 		DECLARE copies_book_copies INT;
 		DECLARE copies_book_status INT;
 		BEGIN
+			-- Acho que e otimizavel, mas nao cheguei a tentar
 			copies_book_status := COUNT(*) FROM Book_Loans.Book_Status AS bs
 									WHERE bs.book_id = _book_id AND 
 									bs.branch_id = _branch_id;
@@ -38,6 +41,8 @@ BEGIN;
 		
 	$$ LANGUAGE plpgsql;
 		
+	-- Pensei em usar cursor pra fazer a parte de consertar as inconsistencias
+	-- mas usar uma tabela temporaria pareceu mais facil de fazer e abstrair
 	CREATE TEMPORARY TABLE Copy_Inconsistencies (
 		book_id INT NOT NULL,
 		branch_id INT NOT NULL,
@@ -76,6 +81,15 @@ BEGIN;
 	
 	CALL Book_Loans.Remove_Copies_Inconsistencies();
 
+	-- Como as funcoes e procedimentos foram feitas com o proposito de fazer
+	-- uma transicao de sistema, entao acho que faz sentido dropar elas depois
+	DROP PROCEDURE Book_Loans.Remove_Copies_Inconsistencies;
+	DROP PROCEDURE Book_Loans.Fix_Copy_Inconsistencies;
+	DROP FUNCTION Book_Loans.Get_Copies_Inconsistencies;
+	DROP TABLE Copy_Inconsistencies;
+
+
+	-- Alterando tabelas conforme pedido
 	ALTER TABLE Book_Loans.Book_Loans 
 		ADD COLUMN book_status_id INT;
 	ALTER TABLE Book_Loans.Book_Loans
@@ -84,7 +98,12 @@ BEGIN;
 		DROP CONSTRAINT FK_Book_Loans_Book;
 	ALTER TABLE Book_Loans.Book_Loans
 		DROP CONSTRAINT FK_Book_Loans_Branch;
-		
+
+
+	-- Acho que da pra notar que eu fiz funcao pra tudo, mas acho que
+	-- fica mais facil de abstrair o que esta acontecendo
+
+	-- Pega a primeira copia disponivel em determinado dia, retorna null se nao tiver
 	CREATE OR REPLACE FUNCTION Book_Loans.Get_Available_Copy_Given_Day(_book_id INT, _branch_id INT, _day DATE) RETURNS INT AS $$
 		BEGIN
 			RETURN 
@@ -107,6 +126,9 @@ BEGIN;
 		
 	$$ LANGUAGE plpgsql;
 		
+	-- Feito para definir a copia que o usuario pegou em determinado dia
+	-- essa funcao tambem e uma para a transicao do banco
+	-- pois nao tem como saber qual copia o usuario pegou anteriormente
 	CREATE OR REPLACE PROCEDURE Book_Loans.Add_Copy_Book_Loan(_loan Book_Loans.Book_Loans) LANGUAGE plpgsql AS $$
         BEGIN
             UPDATE Book_Loans.Book_Loans
@@ -131,7 +153,15 @@ BEGIN;
 	$$;
 	
 	CALL Book_Loans.Update_Book_Loans();
+
+	-- Feita a transicao, podemos dropar a funcao
+	-- suponho que novos inserts seriam feitos pensando
+	-- no id da copia
+	DROP PROCEDURE Book_Loans.Update_Book_Loans;
+	DROP PROCEDURE Book_Loans.Add_Copy_Book_Loan;
 	
+
+	-- Alterando tabelas conforme pedido
  	ALTER TABLE Book_Loans.Book_Loans
  		ADD CONSTRAINT PK_Book_Loans PRIMARY KEY (book_status_id, date_out);
  	ALTER TABLE Book_Loans.Book_Loans
@@ -141,6 +171,8 @@ BEGIN;
 		
 	DROP TABLE Book_Copies_Temp;
 
+
+	-- Fazendo a view
 	CREATE VIEW Book_Loans.Book_Copies (
 		book_id,
 		branch_id,
@@ -153,7 +185,10 @@ BEGIN;
 			GROUP BY bs.book_id, bs.branch_id
 			ORDER BY bs.book_id, bs.branch_id;
 		
-		
+
+	
+	-- Talvez nao seja o jeito mais inteligente de fazer
+	-- mas ele perfeitamente corrige a diferenca de copias	
 	CREATE OR REPLACE PROCEDURE Book_Loans.Add_New_Books(_book_id INT, _branch_id INT, _old_no_of_copies INT, _new_no_of_copies INT) LANGUAGE plpgsql AS $$
 		DECLARE _copy INT;
 		BEGIN
@@ -168,24 +203,33 @@ BEGIN;
 		DECLARE _copy INT;
 		BEGIN 
 			IF TG_OP = 'INSERT' THEN
+				-- Adicionou novas copias entao elas devem ser registradas individualmente
 				FOR _copy IN 1..NEW.no_of_copies LOOP 
 					INSERT INTO Book_Loans.Book_Status (book_id, branch_id)
 						VALUES (NEW.book_id, NEW.branch_id);
 				END LOOP;
 			ELSEIF TG_OP = 'DELETE' THEN
+				-- Deletando todas copias
+				-- Acredito que nao devemos alterar tambem a tabela de emprestimos
 				DELETE FROM Book_Loans.Book_Status AS bs
 					WHERE bs.book_id = OLD.book_id AND 
 					bs.branch_id = OLD.branch_id;
 			ELSEIF TG_OP = 'UPDATE' THEN
+				-- Alteracoes de copias na view reduzindo o numero de copias
+				-- NAO devem ser permitidas, entao ha um early return
 				IF OLD.no_of_copies > NEW.no_of_copies THEN
 					RETURN NULL;
 				ELSE 
+				-- Atualizacao onde o numero de copias aumentou ou manteve o mesmo
+				-- Depois de atualizar as copias existentes, ele adiciona as novas
 					UPDATE Book_Loans.Book_Status AS bs SET 
 						book_id = NEW.book_id,
 						branch_id = NEW.branch_id
 						WHERE bs.book_id = OLD.book_id AND
 						bs.branch_id = OLD.branch_id;
 
+					-- Infelizmente eu nao sei o que aconteceu aqui, pois no_of_copies esta vindo como BIGINT
+					-- e nao como INT, entao eu tive que fazer um cast para INT
 					CALL Book_Loans.Add_New_Books(NEW.book_id, NEW.branch_id, OLD.no_of_copies::INT, NEW.no_of_copies::INT);
 				END IF;
 			END IF;
@@ -198,14 +242,5 @@ BEGIN;
 				UPDATE OR
 				DELETE ON Book_Loans.Book_Copies
 		FOR EACH ROW EXECUTE PROCEDURE Book_Loans.Update_Book_Copies();
-		
-
-	
-	SELECT * FROM Book_Loans.Book_Copies;
-	SELECT * FROM Book_Loans.Book_Status;
-	DELETE FROM Book_Loans.Book_Copies WHERE book_id = 1 AND branch_id = 1;
-	INSERT INTO Book_Loans.Book_Copies (book_id, branch_id, no_of_copies) VALUES (1, 1, 10);
-	
-	UPDATE Book_Loans.Book_Copies SET no_of_copies = 14 WHERE book_id = 2 AND branch_id = 1;
-	
+			
 ROLLBACK;
