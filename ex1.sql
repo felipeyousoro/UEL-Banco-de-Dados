@@ -1,4 +1,7 @@
 -- Deixei tudo em transações para poder fazer rollback
+-- Nao sabia se os tres exercicios devem ser feitos separados
+-- ou se devem ser feitos todos juntos
+-- Optei por fazer separado cada
 BEGIN;
 
 CREATE MATERIALIZED VIEW Book_Loans.month_borrowers (
