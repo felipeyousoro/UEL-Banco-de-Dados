@@ -38,6 +38,7 @@ CREATE OR REPLACE TRIGGER Felipe.Update_Month_Borrowers
 	END;
 
 -- o de pgsql fiz ficou assim:
+
 -- CREATE OR REPLACE FUNCTION Book_Loans.refresh_month_borrowers() RETURNS trigger AS $$
 --     BEGIN
 --         REFRESH MATERIALIZED VIEW Book_Loans.month_borrowers;
