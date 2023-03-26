@@ -1,3 +1,12 @@
+-- eu juro que tentei criar materialized view com
+-- REFRESH ON COMMIT
+-- eu criei os logs, passei o comando de refresh na criação da view
+-- mas ela não funcionou por causa dos joins 
+-- quando havia 1 join apenas funcionava, mas quando tinha 2 ou mais não
+
+-- então eu decidi criar a tabela normalmente
+-- e criar o trigger de forma parecida que tinha no exercicio de pgsql 
+-- (que eu esqueci de incluir no envio semana passada, entao deixei ali embaixo) 
 CREATE MATERIALIZED VIEW Felipe.month_borrowers 
     (
     card_no,
@@ -16,12 +25,10 @@ CREATE MATERIALIZED VIEW Felipe.month_borrowers
             lb.branch_name
         FROM Felipe.Borrower b
         JOIN Felipe.Book_Loans bl ON b.card_no = bl.card_no
-        JOIN Felipe.Book bo ON bl.book_id = bo.book_id
+        JOIN Felipe.Book bo ON bl.book_id = bo.book_id -- a partir daqui dava erro se eu fizesse refresh on commit
         JOIN Felipe.Library_Branch lb ON bl.branch_id = lb.branch_id
         WHERE (bl.due_date - bl.date_out) > 30;
 
--- eu simplesmente esqueci de fazer o update no pgsql então
--- estou fazendo aqui, antes tarde do que nunca
 CREATE OR REPLACE TRIGGER Felipe.Update_Month_Borrowers
 	AFTER INSERT OR UPDATE OR DELETE ON Felipe.Book_Loans
 	DECLARE
@@ -30,24 +37,15 @@ CREATE OR REPLACE TRIGGER Felipe.Update_Month_Borrowers
 		DBMS_MVIEW.REFRESH('Felipe.Month_Borrowers');
 	END;
 
-	
--- eu juro que tentei fazer direto na criação da view
--- a parte de atualizar com REFRESH ON COMMIT
--- mas deu algum problema por causa dos joins
--- então eu fiz o trigger
+-- o de pgsql fiz ficou assim:
+-- CREATE OR REPLACE FUNCTION Book_Loans.refresh_month_borrowers() RETURNS trigger AS $$
+--     BEGIN
+--         REFRESH MATERIALIZED VIEW Book_Loans.month_borrowers;
+--         RETURN NULL;
+--     END;
+-- $$ LANGUAGE plpgsql;
 
--- CREATE MATERIALIZED VIEW LOG ON Felipe.Book_Loans
---     WITH PRIMARY KEY, ROWID, SEQUENCE (date_out, due_date)
--- INCLUDING NEW VALUES;
-
--- CREATE MATERIALIZED VIEW LOG ON Felipe.Book
---     WITH PRIMARY KEY, ROWID, SEQUENCE (title, publisher_name)
--- INCLUDING NEW VALUES;
-
--- CREATE MATERIALIZED VIEW LOG ON Felipe.Borrower
---     WITH PRIMARY KEY, ROWID, SEQUENCE (name, address, phone)
--- INCLUDING NEW VALUES;
-
--- CREATE MATERIALIZED VIEW LOG ON Felipe.Library_Branch
---     WITH PRIMARY KEY, ROWID, SEQUENCE (branch_name, address)
--- INCLUDING NEW VALUES;
+-- CREATE TRIGGER refresh_month_borrowers
+--     AFTER INSERT OR UPDATE OR DELETE ON Book_Loans.Book_Loans
+--         FOR EACH STATEMENT
+--             EXECUTE FUNCTION Book_Loans.refresh_month_borrowers();
