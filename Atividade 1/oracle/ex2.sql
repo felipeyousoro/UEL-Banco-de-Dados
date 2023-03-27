@@ -97,27 +97,28 @@ BEGIN;
 	ALTER TABLE Felipe.Book_Loans
 		DROP CONSTRAINT FK_Book_Loans_Branch;
 
-	CREATE OR REPLACE FUNCTION Felipe.Get_Available_Copy_Given_Day(_book_id INT, _branch_id INT, _day DATE) RETURNS INT AS $$
+	CREATE OR REPLACE FUNCTION Felipe.Get_Available_Copy_Given_Day(p_book_id INT, p_branch_id INT, p_day DATE) 
+		RETURN INT 
+		IS
+			v_book_status_id INT;
 		BEGIN
-			RETURN 
-				(SELECT bs.book_status_id 
-					FROM Felipe.Book_Status AS bs
-					WHERE bs.book_id = _book_id AND
-						bs.branch_id = _branch_id AND
-						bs.book_status_id NOT IN 
-							(SELECT bl.book_status_id 
-								FROM Felipe.Book_Loans AS bl
-								WHERE bl.book_id = _book_id AND
-								bl.branch_id = _branch_id AND
-								bl.date_out <= _day AND
-								bl.due_date >= _day AND
-								book_status_id IS NOT NULL)
-									
-					LIMIT 1);
-		
+			SELECT bs.book_status_id INTO v_book_status_id
+			FROM Felipe.Book_Status bs
+			WHERE bs.book_id = p_book_id AND
+				bs.branch_id = p_branch_id AND
+				bs.book_status_id NOT IN 
+					(SELECT bl.book_status_id 
+					FROM Felipe.Book_Loans bl
+					WHERE bl.book_id = p_book_id AND
+						bl.branch_id = p_branch_id AND
+						bl.date_out <= p_day AND
+						bl.due_date >= p_day AND
+						book_status_id IS NOT NULL)
+			AND ROWNUM = 1;
+			
+			RETURN v_book_status_id;
 		END;
-		
-	$$ LANGUAGE plpgsql;
+
 		
 	-- Feito para definir a copia que o usuario pegou em determinado dia
 	-- essa funcao tambem e uma para a transicao do banco
