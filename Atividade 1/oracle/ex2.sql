@@ -1,10 +1,8 @@
 BEGIN;
 
-	CREATE GLOBAL TEMPORARY TABLE Book_Copies_Temp AS (
-		SELECT * FROM Felipe.Book_Copies
-	
-	);
-	DROP TABLE Felipe.Book_Copies;
+	CREATE GLOBAL TEMPORARY TABLE Book_Copies_Temp
+		ON COMMIT PRESERVE ROWS
+		AS SELECT * FROM Felipe.Book_Copies;
 
 	CREATE TABLE Felipe.Book_Status (
 		book_status_id NUMBER GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -35,61 +33,63 @@ BEGIN;
 			RETURN v_copies_book_copies - v_copies_book_status;
 		END;
 	
-	CREATE GLOBAL TEMPORARY TABLE Copy_Inconsistencies (
-		book_id INT NOT NULL,
-		branch_id INT NOT NULL,
-		copies_diff INT NOT NULL
+	CREATE OR REPLACE TYPE Felipe.T_Copy_Inconsistencies_Row AS OBJECT(
+		book_id INT,
+		branch_id INT,
+		copies_diff INT
 	);
 	
-	CREATE OR REPLACE FUNCTION Felipe.Get_Copies_Inconsistencies() 
-		RETURN Copy_Inconsistencies PIPELINED
-		AS 
-			BEGIN
-				FOR rec IN (SELECT bc.book_id, bc.branch_id, Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) AS copy_inconsistencies 
-							FROM Book_Copies_Temp bc 
-							WHERE Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) <> 0)
-				LOOP
-					PIPE ROW (rec);
-				END LOOP;
-				
-				RETURN;
-			END;
-	/
+	CREATE OR REPLACE TYPE Felipe.T_Copy_Inconsistencies_Tab IS TABLE OF Felipe.T_Copy_Inconsistencies_Row;
 
-  	CREATE OR REPLACE PROCEDURE Felipe.Fix_Copy_Inconsistencies(_copy Copy_Inconsistencies) 
-		AS 
-			DECLARE 
-				book INT;
-			BEGIN
-				FOR book IN 1.._copy.copies_diff LOOP
-					INSERT INTO Felipe.Book_Status (book_id, branch_id) VALUES (_copy.book_id, _copy.branch_id);
-				END LOOP;
-			END;
-	/
+	CREATE OR REPLACE PACKAGE Felipe.Copy_Inconsistencies_Pack 
+		IS 
+			FUNCTION Get_Copies_Inconsistencies RETURN Felipe.T_Copy_Inconsistencies_Tab PIPELINED;
+		END;
 
+	CREATE OR REPLACE PACKAGE BODY Felipe.Copy_Inconsistencies_Pack 
+		AS 
+			FUNCTION Get_Copies_Inconsistencies RETURN Felipe.T_Copy_Inconsistencies_Tab PIPELINED IS
+				BEGIN
+					FOR rec IN (SELECT bc.book_id, bc.branch_id, Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) AS copy_inconsistencies 
+								FROM Book_Copies_Temp bc 
+								WHERE Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) <> 0)
+					LOOP
+						PIPE ROW (Felipe.T_Copy_Inconsistencies_Row(rec.book_id, rec.branch_id, rec.copy_inconsistencies));					
+					END LOOP;
+					
+					RETURN;
+		END;
+	END;
 	
-	CREATE OR REPLACE PROCEDURE Felipe.Remove_Copies_Inconsistencies() 
-		AS 
-			BEGIN
-				FOR _copy IN (SELECT * FROM TABLE(Felipe.Get_Copies_Inconsistencies())) LOOP
-					CALL Felipe.Fix_Copy_Inconsistencies(_copy);
-				END LOOP;
-			END;
-	/
+  	CREATE OR REPLACE PROCEDURE Felipe.Fix_Copy_Inconsistencies(p_copy T_Copy_Inconsistencies_Row) 
+		IS 
+			book INT;
+		BEGIN
+			FOR book IN 1..p_copy.copies_diff LOOP
+				INSERT INTO Felipe.Book_Status (book_id, branch_id) VALUES (p_copy.book_id, p_copy.branch_id);
+			END LOOP;
+		END;
+	
+	CREATE OR REPLACE PROCEDURE Felipe.Remove_Copies_Inconsistencies IS 
+		BEGIN
+			FOR v_copy IN (SELECT * FROM TABLE(Felipe.Copy_Inconsistencies_Pack.Get_Copies_Inconsistencies())) LOOP
+				Felipe.Fix_Copy_Inconsistencies(T_Copy_Inconsistencies_Row(v_copy.book_id, v_copy.branch_id, v_copy.copies_diff));
+			END LOOP;
+		END;
+		
+	BEGIN
+		Felipe.Remove_Copies_Inconsistencies;
+	END;
 
-	EXECUTE Felipe.Remove_Copies_Inconsistencies;
 
 	-- Como as funcoes e procedimentos foram feitas com o proposito de fazer
 	-- uma transicao de sistema, entao acho que faz sentido dropar elas depois
 	DROP PROCEDURE Felipe.Remove_Copies_Inconsistencies;
 	DROP PROCEDURE Felipe.Fix_Copy_Inconsistencies;
-	DROP FUNCTION Felipe.Get_Copies_Inconsistencies;
-	DROP TABLE Copy_Inconsistencies;
+	DROP PACKAGE Felipe.Copy_Inconsistencies_Pack;
 
-
-	-- Alterando tabelas conforme pedido
 	ALTER TABLE Felipe.Book_Loans 
-		ADD COLUMN book_status_id INT;
+		ADD (book_status_id NUMBER);
 	ALTER TABLE Felipe.Book_Loans
 		DROP CONSTRAINT PK_Book_Loans;
 	ALTER TABLE Felipe.Book_Loans
@@ -97,11 +97,6 @@ BEGIN;
 	ALTER TABLE Felipe.Book_Loans
 		DROP CONSTRAINT FK_Book_Loans_Branch;
 
-
-	-- Acho que da pra notar que eu fiz funcao pra tudo, mas acho que
-	-- fica mais facil de abstrair o que esta acontecendo
-
-	-- Pega a primeira copia disponivel em determinado dia, retorna null se nao tiver
 	CREATE OR REPLACE FUNCTION Felipe.Get_Available_Copy_Given_Day(_book_id INT, _branch_id INT, _day DATE) RETURNS INT AS $$
 		BEGIN
 			RETURN 
@@ -167,8 +162,8 @@ BEGIN;
  	ALTER TABLE Felipe.Book_Loans
 		DROP COLUMN branch_id;
 		
+	TRUNCATE TABLE Book_Copies_Temp;
 	DROP TABLE Book_Copies_Temp;
-
 
 	-- Fazendo a view
 	CREATE VIEW Felipe.Book_Copies (
