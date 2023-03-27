@@ -6,9 +6,6 @@ BEGIN;
 	);
 	DROP TABLE Felipe.Book_Copies;
 
-		
-	-- Nao tive muitas ideias para o nome da tabela, entao decidi book_status
-	-- por causa da condicao do livro
 	CREATE TABLE Felipe.Book_Status (
 		book_status_id NUMBER GENERATED ALWAYS AS IDENTITY NOT NULL,
 		acquisition_date DATE DEFAULT SYSDATE NOT NULL,
@@ -23,63 +20,64 @@ BEGIN;
 
 	);
 	
-	CREATE OR REPLACE FUNCTION Felipe.Check_Copy_Inconsistencies(_book_id INT, _branch_id INT) RETURNS INT AS $$
-		DECLARE copies_book_copies INT;
-		DECLARE copies_book_status INT;
+	CREATE OR REPLACE FUNCTION Felipe.Check_Copy_Inconsistencies(p_book_id INT, p_branch_id INT) 
+		RETURN INT 
+		IS 
+			v_copies_book_copies INT;
+			v_copies_book_status INT;
 		BEGIN
-			-- Acho que e otimizavel, mas nao cheguei a tentar
-			copies_book_status := COUNT(*) FROM Felipe.Book_Status AS bs
-									WHERE bs.book_id = _book_id AND 
-									bs.branch_id = _branch_id;
-										
-			copies_book_copies := bc.no_of_copies FROM Book_Copies_Temp AS bc
-									WHERE bc.book_id = _book_id AND 
-									bc.branch_id = _branch_id;
-										
-			RETURN copies_book_copies - copies_book_status;
+			SELECT COUNT(*) INTO v_copies_book_status FROM Felipe.Book_Status bs
+			WHERE bs.book_id = p_book_id AND bs.branch_id = p_branch_id;
+			
+			SELECT bc.no_of_copies INTO v_copies_book_copies FROM Book_Copies_Temp bc
+			WHERE bc.book_id = p_book_id AND bc.branch_id = p_branch_id;
+	
+			RETURN v_copies_book_copies - v_copies_book_status;
 		END;
-		
-	$$ LANGUAGE plpgsql;
-		
-	-- Pensei em usar cursor pra fazer a parte de consertar as inconsistencias
-	-- mas usar uma tabela temporaria pareceu mais facil de fazer e abstrair
-	CREATE TEMPORARY TABLE Copy_Inconsistencies (
+	
+	CREATE GLOBAL TEMPORARY TABLE Copy_Inconsistencies (
 		book_id INT NOT NULL,
 		branch_id INT NOT NULL,
 		copies_diff INT NOT NULL
 	);
 	
-	CREATE OR REPLACE FUNCTION Felipe.Get_Copies_Inconsistencies() RETURNS SETOF Copy_Inconsistencies AS $$
-		BEGIN
-			RETURN QUERY 
-				SELECT bc.book_id, bc.branch_id, Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) 
-					FROM Book_Copies_Temp AS bc 
-					WHERE Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) <> 0;
-		END;
-		
-	$$ LANGUAGE plpgsql;
+	CREATE OR REPLACE FUNCTION Felipe.Get_Copies_Inconsistencies() 
+		RETURN Copy_Inconsistencies PIPELINED
+		AS 
+			BEGIN
+				FOR rec IN (SELECT bc.book_id, bc.branch_id, Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) AS copy_inconsistencies 
+							FROM Book_Copies_Temp bc 
+							WHERE Felipe.Check_Copy_Inconsistencies(bc.book_id, bc.branch_id) <> 0)
+				LOOP
+					PIPE ROW (rec);
+				END LOOP;
+				
+				RETURN;
+			END;
+	/
 
-  	CREATE OR REPLACE PROCEDURE Felipe.Fix_Copy_Inconsistencies(_copy Copy_Inconsistencies) LANGUAGE plpgsql AS $$
-		DECLARE book INT;
-		BEGIN
-			FOR book IN 1.._copy.copies_diff LOOP
-                	INSERT INTO Felipe.Book_Status (book_id, branch_id) VALUES (_copy.book_id, _copy.branch_id);
-			END LOOP;
-		END;
-		
-	$$;
+  	CREATE OR REPLACE PROCEDURE Felipe.Fix_Copy_Inconsistencies(_copy Copy_Inconsistencies) 
+		AS 
+			DECLARE 
+				book INT;
+			BEGIN
+				FOR book IN 1.._copy.copies_diff LOOP
+					INSERT INTO Felipe.Book_Status (book_id, branch_id) VALUES (_copy.book_id, _copy.branch_id);
+				END LOOP;
+			END;
+	/
+
 	
-	CREATE OR REPLACE PROCEDURE Felipe.Remove_Copies_Inconsistencies() LANGUAGE plpgsql AS $$
-        DECLARE _copy Copy_Inconsistencies;
-        BEGIN
-            FOR _copy IN SELECT * FROM Felipe.Get_Copies_Inconsistencies() LOOP
-                CALL Felipe.Fix_Copy_Inconsistencies(_copy);
-            END LOOP;
-        END;
-		
-	$$;
-	
-	CALL Felipe.Remove_Copies_Inconsistencies();
+	CREATE OR REPLACE PROCEDURE Felipe.Remove_Copies_Inconsistencies() 
+		AS 
+			BEGIN
+				FOR _copy IN (SELECT * FROM TABLE(Felipe.Get_Copies_Inconsistencies())) LOOP
+					CALL Felipe.Fix_Copy_Inconsistencies(_copy);
+				END LOOP;
+			END;
+	/
+
+	EXECUTE Felipe.Remove_Copies_Inconsistencies;
 
 	-- Como as funcoes e procedimentos foram feitas com o proposito de fazer
 	-- uma transicao de sistema, entao acho que faz sentido dropar elas depois
