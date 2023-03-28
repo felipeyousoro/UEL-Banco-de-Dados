@@ -86,7 +86,10 @@ BEGIN;
 	-- uma transicao de sistema, entao acho que faz sentido dropar elas depois
 	DROP PROCEDURE Felipe.Remove_Copies_Inconsistencies;
 	DROP PROCEDURE Felipe.Fix_Copy_Inconsistencies;
+	DROP FUNCTION Felipe.Check_Copy_Inconsistencies;
 	DROP PACKAGE Felipe.Copy_Inconsistencies_Pack;
+	DROP TYPE Felipe.T_Copy_Inconsistencies_Tab;
+	DROP TYPE Felipe.T_Copy_Inconsistencies_Row;
 
 	ALTER TABLE Felipe.Book_Loans 
 		ADD (book_status_id NUMBER);
@@ -100,6 +103,7 @@ BEGIN;
 	CREATE OR REPLACE FUNCTION Felipe.Get_Available_Copy_Given_Day(p_book_id INT, p_branch_id INT, p_day DATE) 
 		RETURN INT 
 		IS
+			PRAGMA AUTONOMOUS_TRANSACTION;
 			v_book_status_id INT;
 		BEGIN
 			SELECT bs.book_status_id INTO v_book_status_id
@@ -118,44 +122,61 @@ BEGIN;
 			
 			RETURN v_book_status_id;
 		END;
+	
+	CREATE OR REPLACE TYPE Felipe.Book_Loans_T AS OBJECT(
+		book_id INT,
+		branch_id INT,
+		card_no INT,
+		date_out DATE,
+		due_date DATE
 
-		
-	-- Feito para definir a copia que o usuario pegou em determinado dia
-	-- essa funcao tambem e uma para a transicao do banco
-	-- pois nao tem como saber qual copia o usuario pegou anteriormente
-	CREATE OR REPLACE PROCEDURE Felipe.Add_Copy_Book_Loan(_loan Felipe.Book_Loans) LANGUAGE plpgsql AS $$
+	);
+	
+	CREATE OR REPLACE TYPE Felipe.Book_Loans_T_Tab IS TABLE OF Felipe.Book_Loans_T;
+
+	CREATE OR REPLACE PACKAGE Felipe.Book_Loans_Pack
+		IS 
+			PROCEDURE Add_Copy_Book_Loan(p_loan Felipe.Book_Loans_T);
+		END;
+
+	CREATE OR REPLACE PROCEDURE Felipe.Add_Copy_Book_Loan(p_loan Felipe.Book_Loans_T) 
+		IS
         BEGIN
             UPDATE Felipe.Book_Loans
 				SET 
-					book_status_id = Felipe.Get_Available_Copy_Given_Day(_loan.book_id, _loan.branch_id, _loan.date_out)
+					book_status_id = Felipe.Get_Available_Copy_Given_Day(p_loan.book_id, p_loan.branch_id, p_loan.date_out)
 				WHERE
-					book_id = _loan.book_id AND
-					branch_id = _loan.branch_id AND
-					card_no = _loan.card_no;
+					book_id = p_loan.book_id AND
+					branch_id = p_loan.branch_id AND
+					card_no = p_loan.card_no;
 					
         END;
-	$$;
-	
-	CREATE OR REPLACE PROCEDURE Felipe.Update_Book_Loans() LANGUAGE plpgsql AS $$
-		DECLARE _loan Felipe.Book_Loans;
-		BEGIN
-			FOR _loan IN SELECT * FROM Felipe.Book_Loans LOOP
-				CALL Felipe.Add_Copy_Book_Loan(_loan);
-			END LOOP;
-		END;
-		
-	$$;
-	
-	CALL Felipe.Update_Book_Loans();
 
-	-- Feita a transicao, podemos dropar a funcao
-	-- suponho que novos inserts seriam feitos pensando
-	-- no id da copia
+	CREATE OR REPLACE PROCEDURE Felipe.Update_Book_Loans
+		IS
+		    CURSOR c_book_loans IS SELECT * FROM Felipe.Book_Loans;
+			v_loan c_book_loans%ROWTYPE;
+		BEGIN
+		    OPEN c_book_loans;
+		    LOOP
+		        FETCH c_book_loans INTO v_loan;
+		        EXIT WHEN c_book_loans%NOTFOUND;
+		        Felipe.Add_Copy_Book_Loan(Felipe.Book_Loans_T(v_loan.book_id, v_loan.branch_id, v_loan.card_no, v_loan.date_out, v_loan.due_date));
+		    END LOOP;
+		    CLOSE c_book_loans;
+		END;
+	
+	BEGIN
+		Felipe.Update_Book_Loans();
+	END;
+
 	DROP PROCEDURE Felipe.Update_Book_Loans;
 	DROP PROCEDURE Felipe.Add_Copy_Book_Loan;
+	DROP PACKAGE Felipe.Book_Loans_Pack;
+	DROP TYPE Felipe.Book_Loans_T_Tab;
+	DROP TYPE Felipe.Book_Loans_T;
 	
 
-	-- Alterando tabelas conforme pedido
  	ALTER TABLE Felipe.Book_Loans
  		ADD CONSTRAINT PK_Book_Loans PRIMARY KEY (book_status_id, date_out);
  	ALTER TABLE Felipe.Book_Loans
