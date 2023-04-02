@@ -213,10 +213,6 @@ CREATE VIEW Felipe.Book_Copies (
         GROUP BY bs.book_id, bs.branch_id
         ORDER BY bs.book_id, bs.branch_id;
 
-
-
--- Talvez nao seja o jeito mais inteligente de fazer
--- mas ele perfeitamente corrige a diferenca de copias
 CREATE OR REPLACE PROCEDURE Felipe.Add_New_Books(p_book_id INT, p_branch_id INT, p_old_no_of_copies INT,
                                                  p_new_no_of_copies INT)
     IS
