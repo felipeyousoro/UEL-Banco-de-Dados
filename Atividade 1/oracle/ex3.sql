@@ -68,85 +68,75 @@ CREATE OR REPLACE FUNCTION Get_Shortened_Name(p_name VARCHAR)
 
 --PAREI AQUI!!!!
 
-CREATE TABLE Book_Loans.Book_Authors_Log (
-    book_id INT NOT NULL,
-    new_author_name VARCHAR(255) NOT NULL,
-    old_author_name VARCHAR(255) NOT NULL,
-    update_timestamp TIMESTAMP NOT NULL DEFAULT NOW()
+CREATE TABLE Felipe.Book_Authors_Log (
+    book_id NUMBER NOT NULL,
+    new_author_name VARCHAR2(255) NOT NULL,
+    old_author_name VARCHAR2(255) NOT NULL,
+    update_timestamp TIMESTAMP DEFAULT SYSDATE NOT NULL
 );
 
-CREATE FUNCTION Book_Loans.Log_Author_Update() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION Log_Author_Update(p_old_book_id NUMBER, p_old_author_name VARCHAR2, p_new_book_id NUMBER, p_new_author_name VARCHAR2)
+    RETURN NUMBER
+    AS
     BEGIN
-        INSERT INTO Book_Loans.Book_Authors_Log (book_id, new_author_name, old_author_name)
-            VALUES (NEW.book_id, NEW.author_name, OLD.author_name);
-        RETURN NEW;
+        INSERT INTO Felipe.Book_Authors_Log (book_id, new_author_name, old_author_name)
+            VALUES (p_new_book_id, p_new_author_name, p_old_author_name);
+        RETURN p_new_book_id;
     END;
-$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER Log_Author_Update
-    AFTER UPDATE ON Book_Loans.Book_Authors
+
+CREATE OR REPLACE TRIGGER Log_Author_Update_Trigger
+    AFTER UPDATE ON Felipe.Book_Authors
     FOR EACH ROW
     WHEN (OLD.author_name <> NEW.author_name)
-    EXECUTE PROCEDURE Book_Loans.Log_Author_Update();
+        DECLARE
+            v_new_book_id NUMBER;
+        BEGIN
+            v_new_book_id := Log_Author_Update(:OLD.book_id, :OLD.author_name, :NEW.book_id, :NEW.author_name);
+        END;
 
-
-CREATE PROCEDURE Book_Loans.Detect_And_Reconcile_Authors() LANGUAGE plpgsql AS $$
-    DECLARE
-        _record1 RECORD;
-        _record2 RECORD;
-        _author_name VARCHAR;
-        _count INT;
-        _count_sum INT;
-        _cursor1 CURSOR FOR SELECT author_name FROM Book_Loans.Book_Authors FOR UPDATE;
+CREATE OR REPLACE PROCEDURE Felipe.Detect_And_Reconcile_Authors AS
+    v_record1_book_author_name VARCHAR2(150);
+    v_author_name VARCHAR2(150);
+    v_count NUMBER;
+    v_count_sum NUMBER;
+    CURSOR v_cursor1 IS
+        SELECT author_name FROM Felipe.Book_Authors FOR UPDATE;
     BEGIN
-        OPEN _cursor1;
+        OPEN v_cursor1;
         LOOP
-            FETCH _cursor1 INTO _record1;
+            FETCH v_cursor1 INTO v_record1_book_author_name;
+            EXIT WHEN v_cursor1%NOTFOUND;
 
-            EXIT WHEN NOT FOUND;
-            -- Definitivamente otimizavel, mas a logica e a seguinte
+            SELECT author_name, COUNT(*) AS author_count
+            INTO v_author_name, v_count
+            FROM Felipe.Book_Authors
+            WHERE Levenshtein(author_name, v_record1_book_author_name) < 3
+                OR Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(v_record1_book_author_name)) < 3
+                OR Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(v_record1_book_author_name)
+            GROUP BY author_name
+            ORDER BY author_count DESC
+            FETCH FIRST 1 ROW ONLY;
 
-            -- Contagem do nome mais comum caso siga os seguintes requisitos:
+            SELECT SUM(v_count) INTO v_count_sum FROM DUAL;
 
-                -- 1. As diferenças dos nomes originais sao ate 2 (ha possibilidade de algum nome aqui
-                    -- ja estar reduzido)
-                -- 2. As diferenças dos nomes reduzidos sao ate 2
-
-                -- 3. Satisfeitas alguma das condiçoes
-                    -- o nome do meio reduzido DEVE ser igual, para que nao sejam casados nomes
-                    -- cuja unica diferenca seja o nome do meio
-
-            -- Atualiza todos os nomes que satisfazem os requisitos anteriores
-            -- com o primeiro da contagem (por isso o limit 1)
-                SELECT author_name, COUNT(*) AS author_count
-                    INTO _author_name, _count
-                    FROM Book_Loans.Book_Authors
-                    WHERE Levenshtein(author_name, _record1.author_name) < 3 OR
-                        Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name(_record1.author_name)) < 3 OR
-                        Book_Loans.Get_Shortened_Middle_Name(author_name) = Book_Loans.Get_Shortened_Middle_Name(_record1.author_name)
-                    GROUP BY author_name
-                    ORDER BY author_count DESC
-                    LIMIT 1;
-
-                    SELECT SUM(_count) INTO _count_sum;
-
-                UPDATE Book_Loans.Book_Authors
-                    SET author_name = _author_name
-                    WHERE Levenshtein(author_name, _author_name) < 3 OR
-                        Levenshtein(Book_Loans.Get_Shortened_Name(author_name), Book_Loans.Get_Shortened_Name(_record1.author_name)) < 3 OR
-                        Book_Loans.Get_Shortened_Middle_Name(author_name) = Book_Loans.Get_Shortened_Middle_Name(_record1.author_name);
-
+            UPDATE Felipe.Book_Authors
+            SET author_name = v_author_name
+            WHERE Levenshtein(author_name, v_author_name) < 3
+                OR Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(v_record1_book_author_name)) < 3
+                OR Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(v_record1_book_author_name);
 
         END LOOP;
-        CLOSE _cursor1;
+        CLOSE v_cursor1;
     END;
-$$;
 
-CALL Book_Loans.Detect_And_Reconcile_Authors();
+BEGIN
+    Felipe.Detect_And_Reconcile_Authors;
+END;
 
 -- Eu nao sei se o procedimento foi feito para ser chamado uma vez ou varias vezes
 -- entao eu decidi deletar
-DROP PROCEDURE Book_Loans.Detect_And_Reconcile_Authors;
+DROP PROCEDURE Felipe.Detect_And_Reconcile_Authors;
 
 -- SELECT * FROM Book_Loans.Book_Authors;
 -- SELECT * FROM Book_Loans.Book_Authors_Log;
