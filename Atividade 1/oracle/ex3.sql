@@ -114,6 +114,8 @@ CREATE OR REPLACE PROCEDURE Felipe.Detect_And_Reconcile_Authors AS
             SELECT author_name, COUNT(*) AS author_count
                 INTO v_author_name, v_count
                 FROM Felipe.Book_Authors
+
+                -- Descobri que tinha esquecido de colocar o AND no pgsql, corrigi aqui.
                 WHERE (Levenshtein(author_name, v_record1_book_author_name) < 3
                     OR Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(v_record1_book_author_name)) < 3)
                     AND Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(v_record1_book_author_name)
@@ -141,8 +143,6 @@ BEGIN
     Felipe.Detect_And_Reconcile_Authors;
 END;
 
--- Eu nao sei se o procedimento foi feito para ser chamado uma vez ou varias vezes
--- entao eu decidi deletar
 DROP PROCEDURE Felipe.Detect_And_Reconcile_Authors;
 
 -- SELECT * FROM Felipe.Book_Authors;
