@@ -108,23 +108,30 @@ CREATE OR REPLACE PROCEDURE Felipe.Detect_And_Reconcile_Authors AS
             FETCH v_cursor1 INTO v_record1_book_author_name;
             EXIT WHEN v_cursor1%NOTFOUND;
 
+            v_count := NULL;
+            v_author_name := NULL;
+
             SELECT author_name, COUNT(*) AS author_count
-            INTO v_author_name, v_count
-            FROM Felipe.Book_Authors
-            WHERE Levenshtein(author_name, v_record1_book_author_name) < 3
-                OR Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(v_record1_book_author_name)) < 3
-                OR Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(v_record1_book_author_name)
-            GROUP BY author_name
-            ORDER BY author_count DESC
-            FETCH FIRST 1 ROW ONLY;
+                INTO v_author_name, v_count
+                FROM Felipe.Book_Authors
+                WHERE (Levenshtein(author_name, v_record1_book_author_name) < 3
+                    OR Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(v_record1_book_author_name)) < 3)
+                    AND Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(v_record1_book_author_name)
+                GROUP BY author_name
+                ORDER BY author_count DESC
+                FETCH FIRST 1 ROW ONLY;
 
-            SELECT SUM(v_count) INTO v_count_sum FROM DUAL;
+            IF v_count IS NOT NULL AND v_author_name IS NOT NULL THEN
 
-            UPDATE Felipe.Book_Authors
-            SET author_name = v_author_name
-            WHERE Levenshtein(author_name, v_author_name) < 3
-                OR Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(v_record1_book_author_name)) < 3
-                OR Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(v_record1_book_author_name);
+                SELECT SUM(v_count) INTO v_count_sum FROM DUAL;
+
+                    UPDATE Felipe.Book_Authors
+                    SET author_name = v_author_name
+                    WHERE (Levenshtein(author_name, v_author_name) < 3
+                        OR Levenshtein(Get_Shortened_Name(author_name), Get_Shortened_Name(v_record1_book_author_name)) < 3)
+                        AND Get_Shortened_Middle_Name(author_name) = Get_Shortened_Middle_Name(v_record1_book_author_name);
+
+            END IF;
 
         END LOOP;
         CLOSE v_cursor1;
@@ -138,8 +145,7 @@ END;
 -- entao eu decidi deletar
 DROP PROCEDURE Felipe.Detect_And_Reconcile_Authors;
 
--- SELECT * FROM Book_Loans.Book_Authors;
--- SELECT * FROM Book_Loans.Book_Authors_Log;
-
+-- SELECT * FROM Felipe.Book_Authors;
+-- SELECT * FROM Felipe.Book_Authors_Log;
 
 
