@@ -66,8 +66,6 @@ CREATE OR REPLACE FUNCTION Get_Shortened_Name(p_name VARCHAR)
     END;
 
 
---PAREI AQUI!!!!
-
 CREATE TABLE Felipe.Book_Authors_Log (
     book_id NUMBER NOT NULL,
     new_author_name VARCHAR2(255) NOT NULL,

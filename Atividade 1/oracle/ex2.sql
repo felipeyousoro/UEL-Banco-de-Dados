@@ -191,7 +191,7 @@ DROP TYPE Felipe.Book_Loans_T;
 
 
 ALTER TABLE Felipe.Book_Loans
-    ADD CONSTRAINT PK_Book_Loans PRIMARY KEY (book_status_id, date_out);
+    ADD CONSTRAINT PK_Book_Loans PRIMARY KEY (book_status_id, card_no, date_out);
 ALTER TABLE Felipe.Book_Loans
     DROP COLUMN book_id;
 ALTER TABLE Felipe.Book_Loans
